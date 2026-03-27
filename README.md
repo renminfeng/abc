@@ -15,4 +15,14 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## 直接运行核心程序
+```bash
+python calculator_core.py "1 + 2 * (3 - 1)"
+```
+
+## 测试
+```bash
+python -m unittest discover -s tests
+```
+
 浏览器访问：`http://127.0.0.1:5000`

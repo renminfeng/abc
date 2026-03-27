@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import ast
+import sys
 
 
 class SafeEvaluator(ast.NodeVisitor):
@@ -42,9 +44,10 @@ class SafeEvaluator(ast.NodeVisitor):
         return +value if isinstance(node.op, ast.UAdd) else -value
 
     def visit_Constant(self, node: ast.Constant) -> float:
-        if not isinstance(node.value, (int, float)):
+        value = node.value
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError("只允许数字")
-        return float(node.value)
+        return float(value)
 
     def visit_Num(self, node: ast.Num) -> float:  # pragma: no cover (compat)
         return float(node.n)
@@ -60,3 +63,26 @@ def evaluate_expression(expression: str) -> float:
     parsed = ast.parse(expression, mode="eval")
     evaluator = SafeEvaluator()
     return evaluator.visit(parsed)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Safely evaluate arithmetic expressions.")
+    parser.add_argument("expression", nargs="?", help="要计算的算术表达式")
+    args = parser.parse_args(argv)
+
+    if not args.expression:
+        parser.print_help()
+        return 0
+
+    try:
+        result = evaluate_expression(args.expression)
+    except Exception as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 1
+
+    print(result)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
