@@ -1,281 +1,275 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>贪吃蛇小游戏</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #1e3c72, #2a5298);
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: #fff;
-    padding: 20px;
-  }
-  h1 { margin-bottom: 10px; font-size: 28px; letter-spacing: 2px; }
-  .info {
-    display: flex;
-    gap: 30px;
-    margin-bottom: 12px;
-    font-size: 18px;
-  }
-  .info span { font-weight: bold; color: #ffd54f; }
-  canvas {
-    background: #0f1d3a;
-    border: 3px solid #ffd54f;
-    border-radius: 8px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-    touch-action: none;
-  }
-  .controls {
-    margin-top: 16px;
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  button {
-    padding: 10px 22px;
-    font-size: 15px;
-    border: none;
-    border-radius: 6px;
-    background: #ffd54f;
-    color: #1e3c72;
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
-  }
-  button:hover { background: #ffca28; transform: translateY(-2px); }
-  button:active { transform: translateY(0); }
-  .hint {
-    margin-top: 14px;
-    font-size: 13px;
-    opacity: 0.7;
-    text-align: center;
-  }
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    z-index: 10;
-  }
-  .overlay.show { display: flex; }
-  .overlay h2 { font-size: 36px; margin-bottom: 12px; color: #ffd54f; }
-  .overlay p { font-size: 18px; margin-bottom: 20px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天蚕变2040｜政治·金融·经济投资</title>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --panel: rgba(17, 24, 39, 0.7);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #7c3aed;
+      --accent-2: #06b6d4;
+      --line: rgba(148, 163, 184, 0.25);
+      --gold: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 16%, rgba(124, 58, 237, 0.25), transparent 45%),
+        radial-gradient(circle at 85% 20%, rgba(6, 182, 212, 0.2), transparent 40%),
+        radial-gradient(circle at 60% 80%, rgba(251, 191, 36, 0.12), transparent 38%),
+        var(--bg);
+      min-height: 100vh;
+      letter-spacing: 0.2px;
+    }
+
+    .shell {
+      max-width: 1150px;
+      margin: 0 auto;
+      padding: 26px 18px 60px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(6px);
+    }
+
+    .brand {
+      font-weight: 800;
+      font-size: 1.15rem;
+    }
+
+    .brand small {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .menu {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .hero {
+      margin-top: 18px;
+      padding: 34px 24px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(140deg, rgba(30, 41, 59, 0.75), rgba(17, 24, 39, 0.85));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "2040";
+      position: absolute;
+      right: 16px;
+      top: -8px;
+      font-size: 6rem;
+      font-weight: 900;
+      color: rgba(148, 163, 184, 0.08);
+      pointer-events: none;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      line-height: 1.2;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 780px;
+      line-height: 1.75;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      background: var(--panel);
+      backdrop-filter: blur(4px);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(45deg, var(--accent), var(--accent-2));
+      display: inline-block;
+    }
+
+    .post {
+      padding: 14px;
+      border: 1px dashed rgba(148, 163, 184, 0.35);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      background: rgba(15, 23, 42, 0.45);
+    }
+
+    .post:last-child { margin-bottom: 0; }
+
+    .post .tag {
+      color: var(--gold);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .post h3 {
+      margin: 8px 0;
+      font-size: 1.02rem;
+    }
+
+    .post p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.93rem;
+      line-height: 1.65;
+    }
+
+    .widgets {
+      display: grid;
+      gap: 12px;
+    }
+
+    .widget {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .widget h3 {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    .quote {
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.6;
+      border-left: 3px solid var(--accent-2);
+      padding-left: 10px;
+    }
+
+    .footer {
+      margin-top: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .hero { padding: 26px 18px; }
+      .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+  </style>
 </head>
 <body>
-  <h1>贪吃蛇</h1>
-  <div class="info">
-    分数: <span id="score">0</span>
-    最高: <span id="best">0</span>
-  </div>
-  <canvas id="game" width="400" height="400"></canvas>
-  <div class="controls">
-    <button id="startBtn">开始</button>
-    <button id="pauseBtn">暂停</button>
-    <button id="resetBtn">重置</button>
-  </div>
-  <div class="hint">使用方向键 / WASD 控制方向,空格暂停</div>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        天蚕变2040
+        <small>在噪音里寻找秩序，在波动中理解世界</small>
+      </div>
+      <nav class="menu">
+        <span>政治观察</span>
+        <span>金融市场</span>
+        <span>宏观经济</span>
+        <span>投资笔记</span>
+      </nav>
+    </header>
 
-  <div class="overlay" id="overlay">
-    <h2 id="overlayTitle">游戏结束</h2>
-    <p id="overlayText">点击「开始」再来一局</p>
-  </div>
+    <section class="hero">
+      <h1>抽象而理性：给政治、金融与投资一个同频坐标</h1>
+      <p>
+        这里不是快餐资讯站，而是一张持续生长的思维地图。每篇记录都试图回答：政策如何影响资本？
+        资本如何反馈经济？经济又如何重塑普通人的机会边界？
+      </p>
+    </section>
 
-<script>
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const scoreEl = document.getElementById('score');
-  const bestEl = document.getElementById('best');
-  const overlay = document.getElementById('overlay');
-  const overlayTitle = document.getElementById('overlayTitle');
-  const overlayText = document.getElementById('overlayText');
+    <section class="grid">
+      <article class="panel">
+        <h2><span class="dot"></span> 最新文章</h2>
 
-  const CELL = 20;
-  const COLS = canvas.width / CELL;
-  const ROWS = canvas.height / CELL;
+        <div class="post">
+          <div class="tag">政治</div>
+          <h3>制度预期与市场情绪：谁在定义“安全边际”？</h3>
+          <p>从政策语言到市场行为，预期管理正在成为资产定价的隐形坐标。本文尝试拆解叙事、情绪与风险偏好之间的传导链条。</p>
+        </div>
 
-  let snake, dir, nextDir, food, score, best, running, timer, speed;
+        <div class="post">
+          <div class="tag">金融</div>
+          <h3>流动性像潮水：你看到的是上涨，还是估值漂移？</h3>
+          <p>当“宽松”成为默认背景，资产价格的上涨究竟来自基本面改善，还是贴现率变化？用框架而非结论来审视短期狂热。</p>
+        </div>
 
-  best = parseInt(localStorage.getItem('snake_best') || '0', 10);
-  bestEl.textContent = best;
+        <div class="post">
+          <div class="tag">投资</div>
+          <h3>个人组合实验室：把宏观判断翻译成仓位动作</h3>
+          <p>记录仓位变化、风险预算和复盘笔记，建立一个可迭代的投资系统，而不是依赖单次正确的“神预测”。</p>
+        </div>
+      </article>
 
-  function init() {
-    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
-    dir = { x: 1, y: 0 };
-    nextDir = { x: 1, y: 0 };
-    score = 0;
-    speed = 130;
-    placeFood();
-    scoreEl.textContent = score;
-    draw();
-  }
+      <aside class="widgets">
+        <section class="widget">
+          <h3>博主标签</h3>
+          <p class="quote">#政策周期 #利率路径 #全球资产 #行为金融 #长期主义</p>
+        </section>
 
-  function placeFood() {
-    while (true) {
-      const f = {
-        x: Math.floor(Math.random() * COLS),
-        y: Math.floor(Math.random() * ROWS),
-      };
-      if (!snake.some(s => s.x === f.x && s.y === f.y)) {
-        food = f;
-        return;
-      }
-    }
-  }
+        <section class="widget">
+          <h3>观察清单</h3>
+          <p class="quote">1. 美债收益率曲线<br>2. 大宗商品温度计<br>3. 风险资产波动率<br>4. 核心经济体政策信号</p>
+        </section>
 
-  function step() {
-    if ((nextDir.x !== -dir.x || nextDir.y !== -dir.y)) {
-      dir = nextDir;
-    }
-    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+        <section class="widget">
+          <h3>写作原则</h3>
+          <p class="quote">先搭框架，再谈观点；先讲概率，再谈立场；先管理风险，再追逐收益。</p>
+        </section>
+      </aside>
+    </section>
 
-    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-      return gameOver();
-    }
-    if (snake.some(s => s.x === head.x && s.y === head.y)) {
-      return gameOver();
-    }
-
-    snake.unshift(head);
-    if (head.x === food.x && head.y === food.y) {
-      score += 10;
-      scoreEl.textContent = score;
-      if (speed > 60) speed -= 2;
-      placeFood();
-      restartTimer();
-    } else {
-      snake.pop();
-    }
-    draw();
-  }
-
-  function draw() {
-    ctx.fillStyle = '#0f1d3a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    for (let i = 1; i < COLS; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * CELL, 0);
-      ctx.lineTo(i * CELL, canvas.height);
-      ctx.stroke();
-    }
-    for (let i = 1; i < ROWS; i++) {
-      ctx.beginPath();
-      ctx.moveTo(0, i * CELL);
-      ctx.lineTo(canvas.width, i * CELL);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#ff5252';
-    ctx.beginPath();
-    ctx.arc(
-      food.x * CELL + CELL / 2,
-      food.y * CELL + CELL / 2,
-      CELL / 2 - 2, 0, Math.PI * 2
-    );
-    ctx.fill();
-
-    snake.forEach((seg, i) => {
-      ctx.fillStyle = i === 0 ? '#ffd54f' : `hsl(${50 + i * 4}, 80%, ${60 - Math.min(i, 20)}%)`;
-      ctx.fillRect(seg.x * CELL + 1, seg.y * CELL + 1, CELL - 2, CELL - 2);
-    });
-  }
-
-  function gameOver() {
-    running = false;
-    clearInterval(timer);
-    if (score > best) {
-      best = score;
-      localStorage.setItem('snake_best', String(best));
-      bestEl.textContent = best;
-      overlayTitle.textContent = '新纪录!';
-    } else {
-      overlayTitle.textContent = '游戏结束';
-    }
-    overlayText.textContent = `本局得分 ${score} 分`;
-    overlay.classList.add('show');
-  }
-
-  function restartTimer() {
-    clearInterval(timer);
-    timer = setInterval(step, speed);
-  }
-
-  function start() {
-    if (running) return;
-    overlay.classList.remove('show');
-    if (!snake) init();
-    running = true;
-    restartTimer();
-  }
-
-  function pause() {
-    if (!running) return;
-    running = false;
-    clearInterval(timer);
-  }
-
-  function reset() {
-    pause();
-    overlay.classList.remove('show');
-    init();
-  }
-
-  document.getElementById('startBtn').addEventListener('click', start);
-  document.getElementById('pauseBtn').addEventListener('click', pause);
-  document.getElementById('resetBtn').addEventListener('click', () => { reset(); start(); });
-
-  const keyMap = {
-    ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 }, W: { x: 0, y: -1 },
-    ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 }, S: { x: 0, y: 1 },
-    ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 }, A: { x: -1, y: 0 },
-    ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 }, D: { x: 1, y: 0 },
-  };
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === ' ') {
-      e.preventDefault();
-      running ? pause() : start();
-      return;
-    }
-    const d = keyMap[e.key];
-    if (d) {
-      e.preventDefault();
-      nextDir = d;
-    }
-  });
-
-  let touchStart = null;
-  canvas.addEventListener('touchstart', (e) => {
-    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  });
-  canvas.addEventListener('touchend', (e) => {
-    if (!touchStart) return;
-    const dx = e.changedTouches[0].clientX - touchStart.x;
-    const dy = e.changedTouches[0].clientY - touchStart.y;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      nextDir = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
-    } else {
-      nextDir = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
-    }
-    touchStart = null;
-  });
-
-  init();
-})();
-</script>
+    <footer class="footer">
+      © 2026 天蚕变2040 · 个人博客原型版（持续升级中）
+    </footer>
+  </main>
 </body>
 </html>
