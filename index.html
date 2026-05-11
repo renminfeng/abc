@@ -1,895 +1,754 @@
-import React, { useMemo, useRef, useState } from "react";
-
-type FriendStatus = "online" | "away" | "busy" | "offline";
-
-type Message = {
-  from: "me" | "them";
-  text: string;
-  time: string;
-};
-
-type Friend = {
-  id: number;
-  name: string;
-  sign: string;
-  mood: string;
-  status: FriendStatus;
-  color: string;
-  unread: number;
-  messages: Message[];
-};
-
-const friends: Friend[] = [
-  {
-    id: 1,
-    name: "小海豚",
-    sign: "拨号上线中……",
-    mood: "今天也要认真冲浪",
-    status: "online",
-    color: "linear-gradient(135deg,#e5f2ff,#8abfff,#bccce4)",
-    unread: 2,
-    messages: [
-      { from: "them", text: "你上线啦？刚刚群里很热闹。", time: "20:11" },
-      { from: "me", text: "在，正在把聊天平台界面做得复古一点。", time: "20:12" },
-      { from: "them", text: "头像要像 99 年那种小图标，别太现代。", time: "20:13" }
-    ]
-  },
-  {
-    id: 2,
-    name: "南方网友",
-    sign: "OICQ 老友记",
-    mood: "离开一会儿，稍后回来",
-    status: "away",
-    color: "linear-gradient(135deg,#fff2c7,#ffbf6f,#ff8c42)",
-    unread: 0,
-    messages: [
-      { from: "them", text: "这个窗口边框要厚一点，像老系统。", time: "19:48" },
-      { from: "me", text: "收到，还会加状态灯、好友列表、聊天气泡。", time: "19:50" }
-    ]
-  },
-  {
-    id: 3,
-    name: "像素猫",
-    sign: "别戳我头像",
-    mood: "喵喵喵，正在聊天室潜水",
-    status: "online",
-    color: "linear-gradient(135deg,#ffe2ff,#b687ff,#7263ff)",
-    unread: 5,
-    messages: [
-      { from: "them", text: "给头像加一点像素锯齿感。", time: "18:05" },
-      { from: "them", text: "不要太真实，要像早期互联网。", time: "18:06" }
-    ]
-  },
-  {
-    id: 4,
-    name: "风铃同学",
-    sign: "聊天室见",
-    mood: "忙碌，稍后回",
-    status: "busy",
-    color: "linear-gradient(135deg,#ffe4ec,#ff9ab3,#ff6580)",
-    unread: 0,
-    messages: [
-      { from: "them", text: "可以做一个右侧个人资料卡。", time: "17:22" },
-      { from: "me", text: "已经安排，保留老派蓝白灰配色。", time: "17:24" }
-    ]
-  },
-  {
-    id: 5,
-    name: "电子雪糕",
-    sign: "欢迎访问我的主页",
-    mood: "离线留言",
-    status: "offline",
-    color: "linear-gradient(135deg,#e1fff5,#7de2c3,#59b5ff)",
-    unread: 0,
-    messages: [
-      { from: "them", text: "记得做一个留言板感觉。", time: "昨天" }
-    ]
-  }
-];
-
-function getTime() {
-  const now = new Date();
-  const hour = String(now.getHours()).padStart(2, "0");
-  const minute = String(now.getMinutes()).padStart(2, "0");
-  return `${hour}:${minute}`;
-}
-
-function playBeep() {
-  try {
-    if (typeof window === "undefined") return;
-    const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
-    const AudioContextClass = audioWindow.AudioContext || audioWindow.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(680, ctx.currentTime);
-    gain.gain.setValueAtTime(0.05, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.08);
-  } catch {
-    return;
-  }
-}
-
-function StatusDot({ status }: { status: FriendStatus }) {
-  const colors: Record<FriendStatus, string> = {
-    online: "#25d65a",
-    away: "#ffd84d",
-    busy: "#f05252",
-    offline: "#b7c0cd"
-  };
-
-  return <span className="status-dot" style={{ backgroundColor: colors[status] }} />;
-}
-
-function Avatar({ color, large = false }: { color: string; large?: boolean }) {
-  return (
-    <div className={large ? "avatar avatar-large" : "avatar"} style={{ background: color }}>
-      <span className="avatar-face" />
-      <span className="avatar-eye avatar-eye-left" />
-      <span className="avatar-eye avatar-eye-right" />
-      <span className="avatar-mouth" />
-      <span className="avatar-foot avatar-foot-left" />
-      <span className="avatar-foot avatar-foot-right" />
-    </div>
-  );
-}
-
-function WindowButton({ children }: { children: React.ReactNode }) {
-  return <button className="window-button">{children}</button>;
-}
-
-export default function App() {
-  const [activeId, setActiveId] = useState(1);
-  const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState("");
-  const [messageMap, setMessageMap] = useState<Record<number, Message[]>>(() => {
-    return friends.reduce<Record<number, Message[]>>((acc, friend) => {
-      acc[friend.id] = friend.messages;
-      return acc;
-    }, {});
-  });
-  const chatBoxRef = useRef<HTMLDivElement | null>(null);
-
-  const activeFriend = friends.find(friend => friend.id === activeId) || friends[0];
-
-  const filteredFriends = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) return friends;
-    return friends.filter(friend => `${friend.name} ${friend.sign} ${friend.mood}`.toLowerCase().includes(keyword));
-  }, [query]);
-
-  function sendMessage() {
-    const text = draft.trim();
-    if (!text) return;
-    playBeep();
-    setMessageMap(prev => ({
-      ...prev,
-      [activeFriend.id]: [
-        ...(prev[activeFriend.id] || []),
-        { from: "me", text, time: getTime() }
-      ]
-    }));
-    setDraft("");
-    window.setTimeout(() => {
-      if (chatBoxRef.current) {
-        chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-      }
-    }, 0);
-  }
-
-  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>蓝星寻呼 1999</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Tahoma", "Microsoft YaHei", sans-serif;
     }
-  }
-
-  return (
-    <div className="page">
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        body {
-          margin: 0;
-        }
-
-        button,
-        input,
-        textarea {
-          font-family: Tahoma, "Microsoft YaHei", sans-serif;
-        }
-
-        .page {
-          min-height: 100vh;
-          padding: 18px;
-          color: #123;
-          font-family: Tahoma, "Microsoft YaHei", sans-serif;
-          background: radial-gradient(circle at 20px 20px, rgba(255,255,255,.2) 2px, transparent 2px), linear-gradient(135deg,#0d63a8,#063b70 55%,#082c5f);
-          background-size: 20px 20px, auto;
-          overflow: hidden;
-        }
-
-        .app-window {
-          height: calc(100vh - 36px);
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          border: 4px solid #072e63;
-          border-radius: 10px;
-          background: #c9ddfb;
-          box-shadow: 10px 10px 0 rgba(0,0,0,.35);
-        }
-
-        .titlebar {
-          height: 44px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-shrink: 0;
-          padding: 0 12px;
-          color: #fff;
-          font-weight: 700;
-          letter-spacing: .5px;
-          border-bottom: 2px solid #062451;
-          background: linear-gradient(to right,#0b4da5,#2d7bd5,#b7d8ff);
-        }
-
-        .title-left {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .logo {
-          width: 18px;
-          height: 18px;
-          position: relative;
-          overflow: hidden;
-          border-radius: 4px;
-          background: #fff;
-        }
-
-        .logo::before {
-          content: "";
-          position: absolute;
-          inset: 3px;
-          border-radius: 50%;
-          background: #1b75d0;
-        }
-
-        .window-buttons {
-          display: flex;
-          gap: 4px;
-        }
-
-        .window-button {
-          width: 28px;
-          height: 22px;
-          cursor: pointer;
-          color: #072c5d;
-          font-weight: 700;
-          border: 1px solid #0a2b63;
-          background: linear-gradient(to bottom,#fff,#a9ccf6);
-          box-shadow: inset 1px 1px 0 rgba(255,255,255,.8);
-        }
-
-        .main {
-          flex: 1;
-          display: grid;
-          grid-template-columns: 300px minmax(0,1fr) 260px;
-          min-height: 0;
-          overflow: hidden;
-        }
-
-        .sidebar,
-        .rightbar {
-          min-height: 0;
-          overflow: auto;
-          background: #dbeaff;
-        }
-
-        .sidebar {
-          border-right: 2px solid #0a3774;
-        }
-
-        .rightbar {
-          border-left: 2px solid #0a3774;
-        }
-
-        .profile {
-          margin: 14px;
-          padding: 12px;
-          border: 2px solid #0a3774;
-          background: linear-gradient(to bottom,#fff,#d8e9ff);
-          box-shadow: inset 2px 2px 0 rgba(255,255,255,.8);
-        }
-
-        .profile-top {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .avatar {
-          width: 42px;
-          height: 42px;
-          position: relative;
-          flex-shrink: 0;
-          overflow: hidden;
-          border: 2px solid #205896;
-          border-radius: 10px;
-          box-shadow: inset 2px 2px 0 rgba(255,255,255,.9), inset -2px -2px 0 rgba(0,0,0,.15), 3px 3px 0 rgba(0,0,0,.2);
-        }
-
-        .avatar-large {
-          width: 62px;
-          height: 62px;
-          border-color: #184f90;
-          border-radius: 14px;
-        }
-
-        .avatar-face {
-          position: absolute;
-          left: 50%;
-          top: 7px;
-          width: 24px;
-          height: 20px;
-          transform: translateX(-50%);
-          border-radius: 50%;
-          background: rgba(255,255,255,.85);
-        }
-
-        .avatar-large .avatar-face {
-          top: 10px;
-          width: 36px;
-          height: 30px;
-        }
-
-        .avatar-eye {
-          position: absolute;
-          top: 16px;
-          width: 4px;
-          height: 4px;
-          border-radius: 50%;
-          background: #111;
-        }
-
-        .avatar-large .avatar-eye {
-          top: 24px;
-          width: 5px;
-          height: 5px;
-        }
-
-        .avatar-eye-left {
-          left: 13px;
-        }
-
-        .avatar-eye-right {
-          right: 13px;
-        }
-
-        .avatar-large .avatar-eye-left {
-          left: 18px;
-        }
-
-        .avatar-large .avatar-eye-right {
-          right: 18px;
-        }
-
-        .avatar-mouth {
-          position: absolute;
-          left: 50%;
-          top: 23px;
-          width: 12px;
-          height: 7px;
-          transform: translateX(-50%);
-          border: 1px solid #9a5200;
-          border-radius: 0 0 8px 8px;
-          background: orange;
-        }
-
-        .avatar-large .avatar-mouth {
-          top: 33px;
-          width: 18px;
-          height: 10px;
-          border-radius: 0 0 10px 10px;
-        }
-
-        .avatar-foot {
-          position: absolute;
-          bottom: 6px;
-          width: 11px;
-          height: 7px;
-          border: 1px solid #9a5200;
-          border-radius: 10px;
-          background: #ffb347;
-        }
-
-        .avatar-large .avatar-foot {
-          bottom: 9px;
-          width: 16px;
-          height: 10px;
-        }
-
-        .avatar-foot-left {
-          left: 7px;
-        }
-
-        .avatar-foot-right {
-          right: 7px;
-        }
-
-        .avatar-large .avatar-foot-left {
-          left: 10px;
-        }
-
-        .avatar-large .avatar-foot-right {
-          right: 10px;
-        }
-
-        .status-dot {
-          width: 10px;
-          height: 10px;
-          display: inline-block;
-          margin-left: 6px;
-          border: 1px solid #0a5724;
-          border-radius: 50%;
-        }
-
-        .nickname {
-          display: flex;
-          align-items: center;
-          color: #05316b;
-          font-size: 18px;
-          font-weight: 700;
-        }
-
-        .signature {
-          margin-top: 6px;
-          padding: 5px 8px;
-          border-radius: 4px;
-          color: #4a5568;
-          font-size: 12px;
-          background: #fff;
-        }
-
-        .quick-buttons {
-          display: grid;
-          grid-template-columns: repeat(4,1fr);
-          gap: 6px;
-          margin-top: 12px;
-        }
-
-        .quick-buttons button,
-        .toolbar-button,
-        .send-button {
-          cursor: pointer;
-          border: 1px solid #0a3774;
-          background: #fff;
-          box-shadow: inset 1px 1px 0 rgba(255,255,255,.8);
-        }
-
-        .quick-buttons button {
-          padding: 5px;
-          font-size: 12px;
-        }
-
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 0 14px 14px;
-          padding: 8px;
-          border: 2px solid #0a3774;
-          background: #fff;
-          box-shadow: inset 1px 1px 3px rgba(0,0,0,.2);
-        }
-
-        .search-box input {
-          width: 100%;
-          border: 0;
-          outline: 0;
-          font-size: 13px;
-        }
-
-        .section-title {
-          padding: 10px 14px;
-          color: #07346f;
-          font-weight: 700;
-          border-top: 2px solid #0a3774;
-          border-bottom: 2px solid #0a3774;
-          background: linear-gradient(to right,#bdd9ff,#fff);
-        }
-
-        .friends {
-          padding: 10px;
-        }
-
-        .friend {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          width: 100%;
-          margin-bottom: 6px;
-          padding: 8px;
-          text-align: left;
-          cursor: pointer;
-          border: 1px solid transparent;
-          border-radius: 6px;
-          background: transparent;
-        }
-
-        .friend:hover,
-        .friend.active {
-          border-color: #0b4da5;
-          background: #fff7cb;
-        }
-
-        .friend-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .friend-title-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-        }
-
-        .friend-name {
-          color: #072d61;
-          font-size: 14px;
-          font-weight: 700;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .friend-sign {
-          margin-top: 3px;
-          color: #5b6572;
-          font-size: 11px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .unread {
-          min-width: 18px;
-          height: 18px;
-          padding: 0 5px;
-          display: grid;
-          place-items: center;
-          color: #fff;
-          font-size: 11px;
-          font-weight: 700;
-          border-radius: 999px;
-          background: #e03131;
-        }
-
-        .chat-area {
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-          min-height: 0;
-          background: #eef6ff;
-        }
-
-        .chat-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-shrink: 0;
-          padding: 12px 16px;
-          border-bottom: 2px solid #0a3774;
-          background: linear-gradient(to bottom,#fff,#c6defc);
-        }
-
-        .chat-user {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          min-width: 0;
-        }
-
-        .chat-actions {
-          display: flex;
-          gap: 4px;
-        }
-
-        .chat-box {
-          flex: 1;
-          min-height: 0;
-          overflow: auto;
-          padding: 20px;
-          background-image: linear-gradient(rgba(12,84,155,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(12,84,155,.05) 1px, transparent 1px);
-          background-size: 18px 18px;
-        }
-
-        .message {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          margin-bottom: 16px;
-        }
-
-        .message.me {
-          justify-content: flex-end;
-        }
-
-        .bubble {
-          max-width: 70%;
-        }
-
-        .message.me .bubble {
-          text-align: right;
-        }
-
-        .time {
-          margin-bottom: 4px;
-          color: #6b7280;
-          font-size: 11px;
-        }
-
-        .bubble-content {
-          padding: 10px 14px;
-          line-height: 1.6;
-          border: 2px solid #525252;
-          border-radius: 12px;
-          background: #fffde8;
-          box-shadow: 3px 3px 0 rgba(0,0,0,.15);
-          word-break: break-word;
-        }
-
-        .message.me .bubble-content {
-          border-color: #165ea8;
-          background: #d8edff;
-        }
-
-        .toolbar {
-          flex-shrink: 0;
-          padding: 10px 12px;
-          border-top: 2px solid #0a3774;
-          background: #dbeaff;
-        }
-
-        .toolbar-top {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-
-        .toolbar-button {
-          width: 32px;
-          height: 32px;
-          font-size: 16px;
-        }
-
-        .editor {
-          display: flex;
-          gap: 10px;
-        }
-
-        .editor textarea {
-          flex: 1;
-          height: 90px;
-          padding: 10px;
-          resize: none;
-          outline: 0;
-          border: 2px solid #0a3774;
-          font-size: 14px;
-          box-shadow: inset 2px 2px 3px rgba(0,0,0,.15);
-        }
-
-        .send-button {
-          width: 110px;
-          color: #072d61;
-          font-size: 15px;
-          font-weight: 700;
-          background: linear-gradient(to bottom,#fff9c8,#ffc85d);
-        }
-
-        .card {
-          margin: 14px;
-          padding: 14px;
-          border: 2px solid #0a3774;
-          background: #fff;
-        }
-
-        .card-yellow {
-          background: #fffde8;
-        }
-
-        .card-avatar-wrap {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 12px;
-        }
-
-        .card h3 {
-          margin: 0 0 10px;
-          color: #07346f;
-          font-size: 15px;
-        }
-
-        .card p,
-        .card li {
-          color: #445;
-          font-size: 13px;
-          line-height: 1.7;
-        }
-
-        .card ul {
-          margin: 0;
-          padding-left: 18px;
-        }
-
-        @media (max-width: 1100px) {
-          .main {
-            grid-template-columns: 260px minmax(0,1fr);
-          }
-
-          .rightbar {
-            display: none;
-          }
-        }
-
-        @media (max-width: 760px) {
-          .page {
-            padding: 0;
-          }
-
-          .app-window {
-            height: 100vh;
-            border-radius: 0;
-          }
-
-          .main {
-            grid-template-columns: minmax(0,1fr);
-          }
-
-          .sidebar {
-            display: none;
-          }
-        }
-      `}</style>
-
-      <div className="app-window">
-        <div className="titlebar">
-          <div className="title-left">
-            <div className="logo" />
-            <div>蓝星寻呼 1999</div>
-          </div>
-          <div className="window-buttons">
-            <WindowButton>—</WindowButton>
-            <WindowButton>□</WindowButton>
-            <WindowButton>×</WindowButton>
-          </div>
-        </div>
-
-        <div className="main">
-          <aside className="sidebar">
-            <div className="profile">
-              <div className="profile-top">
-                <Avatar color="linear-gradient(135deg,#dff0ff,#7bb4ff,#bfcfe4)" large />
-                <div>
-                  <div className="nickname">
-                    rosermf
-                    <StatusDot status="online" />
-                  </div>
-                  <div className="signature">早期互联网模式已开启</div>
-                </div>
-              </div>
-              <div className="quick-buttons">
-                <button>资料</button>
-                <button>空间</button>
-                <button>邮箱</button>
-                <button>设置</button>
-              </div>
-            </div>
-
-            <div className="search-box">
-              <span>🔍</span>
-              <input value={query} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)} type="text" placeholder="查找好友 / 昵称 / 备注" />
-            </div>
-
-            <div className="section-title">好友列表</div>
-
-            <div className="friends">
-              {filteredFriends.map(friend => (
-                <button key={friend.id} className={friend.id === activeId ? "friend active" : "friend"} onClick={() => setActiveId(friend.id)}>
-                  <Avatar color={friend.color} />
-                  <div className="friend-info">
-                    <div className="friend-title-row">
-                      <div className="friend-name">{friend.name}</div>
-                      <StatusDot status={friend.status} />
-                      {friend.unread > 0 && <span className="unread">{friend.unread}</span>}
-                    </div>
-                    <div className="friend-sign">{friend.sign}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <section className="chat-area">
-            <div className="chat-header">
-              <div className="chat-user">
-                <Avatar color={activeFriend.color} />
-                <div>
-                  <div className="friend-name">{activeFriend.name}</div>
-                  <div className="friend-sign">{activeFriend.mood}</div>
-                </div>
-              </div>
-              <div className="chat-actions">
-                <WindowButton>☆</WindowButton>
-                <WindowButton>⚙</WindowButton>
-              </div>
-            </div>
-
-            <div className="chat-box" ref={chatBoxRef}>
-              {(messageMap[activeFriend.id] || []).map((message, index) => (
-                <div key={`${activeFriend.id}-${message.time}-${index}`} className={message.from === "me" ? "message me" : "message"}>
-                  {message.from !== "me" && <Avatar color={activeFriend.color} />}
-                  <div className="bubble">
-                    <div className="time">{message.time}</div>
-                    <div className="bubble-content">{message.text}</div>
-                  </div>
-                  {message.from === "me" && <Avatar color="linear-gradient(135deg,#dff0ff,#7bb4ff,#bfcfe4)" />}
-                </div>
-              ))}
-            </div>
-
-            <div className="toolbar">
-              <div className="toolbar-top">
-                <button className="toolbar-button">☺</button>
-                <button className="toolbar-button">📎</button>
-                <button className="toolbar-button">★</button>
-              </div>
-              <div className="editor">
-                <textarea value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息……" />
-                <button className="send-button" onClick={sendMessage}>发送</button>
-              </div>
-            </div>
-          </section>
-
-          <aside className="rightbar">
-            <div className="section-title">好友资料卡</div>
-            <div className="card">
-              <div className="card-avatar-wrap">
-                <Avatar color={activeFriend.color} large />
-              </div>
-              <h3>{activeFriend.name}</h3>
-              <p>ID：1999{activeFriend.id}88</p>
-              <p>{activeFriend.sign}</p>
-            </div>
-            <div className="card card-yellow">
-              <h3>设计说明</h3>
-              <p>整体采用 1999 年左右即时通讯风格：蓝白灰窗口、厚边框、像素感头像、好友列表、聊天气泡与老式系统按钮。</p>
-            </div>
-            <div className="card">
-              <h3>平台模块</h3>
-              <ul>
-                <li>好友列表</li>
-                <li>聊天窗口</li>
-                <li>搜索好友</li>
-                <li>发送提示音</li>
-                <li>资料卡系统</li>
-                <li>复古原创头像</li>
-              </ul>
-            </div>
-          </aside>
-        </div>
+
+    body {
+      background:
+        radial-gradient(circle at 20px 20px, rgba(255,255,255,.2) 2px, transparent 2px),
+        linear-gradient(135deg,#0d63a8,#063b70 55%,#082c5f);
+      background-size: 20px 20px, auto;
+      min-height: 100vh;
+      padding: 18px;
+      color: #123;
+      overflow: hidden;
+    }
+
+    .window {
+      width: 100%;
+      height: calc(100vh - 36px);
+      background: #c9ddfb;
+      border: 4px solid #072e63;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 10px 10px 0 rgba(0,0,0,.35);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .titlebar {
+      height: 44px;
+      background: linear-gradient(to right,#0b4da5,#2d7bd5,#b7d8ff);
+      border-bottom: 2px solid #062451;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      color: white;
+      font-weight: bold;
+      letter-spacing: .5px;
+    }
+
+    .title-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: #1b75d0;
+    }
+
+    .window-buttons {
+      display: flex;
+      gap: 4px;
+    }
+
+    .window-btn {
+      width: 28px;
+      height: 22px;
+      border: 1px solid #0a2b63;
+      background: linear-gradient(to bottom,white,#a9ccf6);
+      color: #072c5d;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: inset 1px 1px 0 rgba(255,255,255,.8);
+    }
+
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 300px 1fr 260px;
+      overflow: hidden;
+    }
+
+    .sidebar,
+    .rightbar {
+      background: #dbeaff;
+      overflow: auto;
+    }
+
+    .sidebar {
+      border-right: 2px solid #0a3774;
+    }
+
+    .rightbar {
+      border-left: 2px solid #0a3774;
+    }
+
+    .profile {
+      margin: 14px;
+      border: 2px solid #0a3774;
+      background: linear-gradient(to bottom,white,#d8e9ff);
+      padding: 12px;
+      box-shadow: inset 2px 2px 0 rgba(255,255,255,.8);
+    }
+
+    .profile-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 62px;
+      height: 62px;
+      border-radius: 14px;
+      border: 2px solid #184f90;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg,#dff0ff,#7bb4ff,#bfcfe4);
+      box-shadow:
+        inset 2px 2px 0 rgba(255,255,255,.9),
+        inset -2px -2px 0 rgba(0,0,0,.15),
+        3px 3px 0 rgba(0,0,0,.2);
+    }
+
+    .avatar::before {
+      content: "";
+      position: absolute;
+      width: 36px;
+      height: 30px;
+      background: rgba(255,255,255,.85);
+      border-radius: 50%;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+    }
+
+    .eye {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background: #111;
+      border-radius: 50%;
+      top: 24px;
+    }
+
+    .eye.left { left: 18px; }
+    .eye.right { right: 18px; }
+
+    .mouth {
+      position: absolute;
+      width: 18px;
+      height: 10px;
+      background: orange;
+      border-radius: 0 0 10px 10px;
+      left: 50%;
+      top: 33px;
+      transform: translateX(-50%);
+      border: 1px solid #9a5200;
+    }
+
+    .foot {
+      position: absolute;
+      width: 16px;
+      height: 10px;
+      background: #ffb347;
+      border-radius: 10px;
+      bottom: 9px;
+      border: 1px solid #9a5200;
+    }
+
+    .foot.left { left: 10px; }
+    .foot.right { right: 10px; }
+
+    .status {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-left: 6px;
+      border: 1px solid #0a5724;
+      background: #26d957;
+    }
+
+    .nickname {
+      font-size: 18px;
+      font-weight: bold;
+      color: #05316b;
+    }
+
+    .signature {
+      margin-top: 6px;
+      background: white;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #4a5568;
+    }
+
+    .quick-buttons {
+      display: grid;
+      grid-template-columns: repeat(4,1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .quick-buttons button,
+    .send-btn,
+    .toolbar button {
+      border: 1px solid #0a3774;
+      background: white;
+      cursor: pointer;
+      box-shadow: inset 1px 1px 0 rgba(255,255,255,.8);
+    }
+
+    .quick-buttons button {
+      padding: 5px;
+      font-size: 12px;
+    }
+
+    .search-box {
+      margin: 0 14px 14px;
+      border: 2px solid #0a3774;
+      background: white;
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      gap: 8px;
+      box-shadow: inset 1px 1px 3px rgba(0,0,0,.2);
+    }
+
+    .search-box input {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 13px;
+    }
+
+    .section-title {
+      border-top: 2px solid #0a3774;
+      border-bottom: 2px solid #0a3774;
+      background: linear-gradient(to right,#bdd9ff,white);
+      padding: 10px 14px;
+      font-weight: bold;
+      color: #07346f;
+    }
+
+    .friends {
+      padding: 10px;
+    }
+
+    .friend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 6px;
+      border: 1px solid transparent;
+    }
+
+    .friend:hover,
+    .friend.active {
+      border-color: #0b4da5;
+      background: #fff7cb;
+    }
+
+    .mini-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg,#e5f2ff,#8abfff,#bccce4);
+      border: 2px solid #205896;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .mini-avatar::before {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.85);
+      left: 50%;
+      top: 7px;
+      transform: translateX(-50%);
+    }
+
+    .mini-avatar::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 6px;
+      background: orange;
+      left: 50%;
+      top: 22px;
+      transform: translateX(-50%);
+      border-radius: 0 0 8px 8px;
+    }
+
+    .friend-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .friend-name {
+      font-size: 14px;
+      font-weight: bold;
+      color: #072d61;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .friend-sign {
+      font-size: 11px;
+      color: #5b6572;
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-area {
+      display: flex;
+      flex-direction: column;
+      background: #eef6ff;
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 2px solid #0a3774;
+      background: linear-gradient(to bottom,white,#c6defc);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-box {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      background-image:
+        linear-gradient(rgba(12,84,155,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(12,84,155,.05) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+
+    .message {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+
+    .message.me {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      max-width: 70%;
+    }
+
+    .time {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .bubble-content {
+      background: #fffde8;
+      border: 2px solid #525252;
+      border-radius: 12px;
+      padding: 10px 14px;
+      line-height: 1.6;
+      box-shadow: 3px 3px 0 rgba(0,0,0,.15);
+    }
+
+    .message.me .bubble-content {
+      background: #d8edff;
+      border-color: #165ea8;
+    }
+
+    .toolbar {
+      padding: 10px 12px;
+      border-top: 2px solid #0a3774;
+      background: #dbeaff;
+    }
+
+    .toolbar-top {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .toolbar button {
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
+    }
+
+    .editor {
+      display: flex;
+      gap: 10px;
+    }
+
+    textarea {
+      flex: 1;
+      height: 90px;
+      resize: none;
+      border: 2px solid #0a3774;
+      padding: 10px;
+      outline: none;
+      box-shadow: inset 2px 2px 3px rgba(0,0,0,.15);
+      font-size: 14px;
+    }
+
+    .send-btn {
+      width: 110px;
+      background: linear-gradient(to bottom,#fff9c8,#ffc85d);
+      font-weight: bold;
+      color: #072d61;
+      font-size: 15px;
+    }
+
+    .card {
+      margin: 14px;
+      border: 2px solid #0a3774;
+      background: white;
+      padding: 14px;
+    }
+
+    .card h3 {
+      color: #07346f;
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+
+    .card p,
+    .card li {
+      font-size: 13px;
+      line-height: 1.7;
+      color: #445;
+    }
+
+    .card ul {
+      padding-left: 18px;
+    }
+
+    .yellow {
+      background: #fffde8;
+    }
+
+    @media (max-width: 1100px) {
+      .main {
+        grid-template-columns: 260px 1fr;
+      }
+
+      .rightbar {
+        display: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 0;
+      }
+
+      .window {
+        height: 100vh;
+        border-radius: 0;
+      }
+
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="title-left">
+        <div class="logo"></div>
+        <div>蓝星寻呼 1999</div>
+      </div>
+
+      <div class="window-buttons">
+        <button class="window-btn">—</button>
+        <button class="window-btn">□</button>
+        <button class="window-btn">×</button>
       </div>
     </div>
-  );
-}
+
+    <div class="main">
+      <aside class="sidebar">
+        <div class="profile">
+          <div class="profile-top">
+            <div class="avatar">
+              <div class="eye left"></div>
+              <div class="eye right"></div>
+              <div class="mouth"></div>
+              <div class="foot left"></div>
+              <div class="foot right"></div>
+            </div>
+
+            <div>
+              <div class="nickname">
+                rosermf
+                <span class="status"></span>
+              </div>
+              <div class="signature">早期互联网模式已开启</div>
+            </div>
+          </div>
+
+          <div class="quick-buttons">
+            <button>资料</button>
+            <button>空间</button>
+            <button>邮箱</button>
+            <button>设置</button>
+          </div>
+        </div>
+
+        <div class="search-box">
+          🔍
+          <input type="text" placeholder="查找好友 / 昵称 / 备注">
+        </div>
+
+        <div class="section-title">好友列表</div>
+
+        <div class="friends">
+          <div class="friend active">
+            <div class="mini-avatar"></div>
+            <div class="friend-info">
+              <div class="friend-name">小海豚</div>
+              <div class="friend-sign">拨号上线中……</div>
+            </div>
+          </div>
+
+          <div class="friend">
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#fff2c7,#ffbf6f,#ff8c42)"></div>
+            <div class="friend-info">
+              <div class="friend-name">南方网友</div>
+              <div class="friend-sign">OICQ 老友记</div>
+            </div>
+          </div>
+
+          <div class="friend">
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#ffe2ff,#b687ff,#7263ff)"></div>
+            <div class="friend-info">
+              <div class="friend-name">像素猫</div>
+              <div class="friend-sign">别戳我头像</div>
+            </div>
+          </div>
+
+          <div class="friend">
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#ffe4ec,#ff9ab3,#ff6580)"></div>
+            <div class="friend-info">
+              <div class="friend-name">风铃同学</div>
+              <div class="friend-sign">聊天室见</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="chat-area">
+        <div class="chat-header">
+          <div class="chat-user">
+            <div class="mini-avatar"></div>
+            <div>
+              <div class="friend-name">小海豚</div>
+              <div class="friend-sign">今天也要认真冲浪</div>
+            </div>
+          </div>
+
+          <div>
+            <button class="window-btn">☆</button>
+            <button class="window-btn">⚙</button>
+          </div>
+        </div>
+
+        <div class="chat-box" id="chatBox">
+          <div class="message">
+            <div class="mini-avatar"></div>
+            <div class="bubble">
+              <div class="time">20:11</div>
+              <div class="bubble-content">你上线啦？刚刚群里很热闹。</div>
+            </div>
+          </div>
+
+          <div class="message me">
+            <div class="bubble">
+              <div class="time">20:12</div>
+              <div class="bubble-content">在，正在把聊天平台界面做得复古一点。</div>
+            </div>
+            <div class="mini-avatar"></div>
+          </div>
+
+          <div class="message">
+            <div class="mini-avatar"></div>
+            <div class="bubble">
+              <div class="time">20:13</div>
+              <div class="bubble-content">头像要像 99 年那种小图标，别太现代。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-top">
+            <button>☺</button>
+            <button>📎</button>
+            <button>★</button>
+          </div>
+
+          <div class="editor">
+            <textarea id="messageInput" placeholder="输入消息……"></textarea>
+            <button class="send-btn" onclick="sendMessage()">发送</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="rightbar">
+        <div class="section-title">好友资料卡</div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:center;margin-bottom:12px;">
+            <div class="avatar">
+              <div class="eye left"></div>
+              <div class="eye right"></div>
+              <div class="mouth"></div>
+              <div class="foot left"></div>
+              <div class="foot right"></div>
+            </div>
+          </div>
+
+          <h3>小海豚</h3>
+          <p>ID：199988</p>
+          <p style="margin-top:10px;">拨号上线中……</p>
+        </div>
+
+        <div class="card yellow">
+          <h3>设计说明</h3>
+          <p>
+            整体采用 1999 年左右即时通讯风格：蓝白灰窗口、厚边框、像素感头像、好友列表、聊天气泡与老式系统按钮。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>平台模块</h3>
+          <ul>
+            <li>好友列表</li>
+            <li>聊天窗口</li>
+            <li>搜索好友</li>
+            <li>发送提示音</li>
+            <li>资料卡系统</li>
+            <li>复古原创头像</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    function playBeep() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        const ctx = new AudioContextClass();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(680, ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.08);
+      } catch (e) {}
+    }
+
+    function currentTime() {
+      const now = new Date();
+      return now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const chatBox = document.getElementById('chatBox');
+      const text = input.value.trim();
+
+      if (!text) return;
+
+      playBeep();
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message me';
+
+      wrapper.innerHTML = `
+        <div class="bubble">
+          <div class="time">${currentTime()}</div>
+          <div class="bubble-content"></div>
+        </div>
+        <div class="mini-avatar"></div>
+      `;
+
+      wrapper.querySelector('.bubble-content').textContent = text;
+
+      chatBox.appendChild(wrapper);
+
+      input.value = '';
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    document.getElementById('messageInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
